@@ -3,8 +3,6 @@ import React, { useState } from 'react';
 // ============================================
 // CONFIGURATION
 // ============================================
-// Set to true for production (sends data to server)
-// In Vite, use: import.meta.env.VITE_PRODUCTION_MODE === 'true'
 const IS_PRODUCTION = import.meta.env.VITE_PRODUCTION_MODE === 'true';
 const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || '/.netlify/functions/submit-review';
 
@@ -70,11 +68,12 @@ const IMAGE_MAP: Record<string, string> = {
   'surr-33': 'surr-33_uwhs8n',
 };
 
-// Get image URL
+// Get image URL - for images not in map, just use the ID directly
 const img = (id: string) => {
   if (IMAGE_MAP[id]) {
     return `${CLOUDINARY_BASE}/${IMAGE_MAP[id]}.png`;
   }
+  // Try the ID directly (for book-, de-, free-, grid-, abs- images)
   return `${CLOUDINARY_BASE}/${id}.png`;
 };
 
@@ -172,11 +171,11 @@ async function fileToBase64(file: File): Promise<string> {
 
 async function submitReview(
   reviewerName: string,
+  reviewerEmail: string,
   responses: ResponseMap,
   additionalFeedback: string,
   uploadedFiles: UploadedFile[]
 ): Promise<{ success: boolean; message: string }> {
-  // Convert files to base64
   const imageData = await Promise.all(
     uploadedFiles.map(async ({ file }) => ({
       name: file.name,
@@ -187,6 +186,7 @@ async function submitReview(
 
   const payload = {
     reviewerName,
+    reviewerEmail,
     responses,
     additionalFeedback,
     uploadedImages: imageData,
@@ -194,12 +194,10 @@ async function submitReview(
   };
 
   if (!IS_PRODUCTION) {
-    // Development mode: just log and save locally
     console.log('DEV MODE - Would submit:', payload);
     return { success: true, message: 'Saved locally (dev mode)' };
   }
 
-  // Production mode: send to server
   const response = await fetch(API_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -221,16 +219,17 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<any>(null);
   const [responses, setResponses] = useState<ResponseMap>({});
   const [reviewerName, setReviewerName] = useState('');
+  const [reviewerEmail, setReviewerEmail] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load saved data on mount
   React.useEffect(() => {
     try {
-      const savedData = localStorage.getItem('pa-art-review-v3');
+      const savedData = localStorage.getItem('pa-art-review-v4');
       if (savedData) {
         const parsed = JSON.parse(savedData);
         setResponses(parsed.responses || {});
         setReviewerName(parsed.reviewerName || '');
+        setReviewerEmail(parsed.reviewerEmail || '');
       }
     } catch (e) {
       console.log('No saved data found');
@@ -238,25 +237,25 @@ export default function App() {
     setIsLoaded(true);
   }, []);
 
-  // Save data whenever responses change
   React.useEffect(() => {
     if (isLoaded) {
       try {
-        localStorage.setItem('pa-art-review-v3', JSON.stringify({
+        localStorage.setItem('pa-art-review-v4', JSON.stringify({
           responses,
           reviewerName,
+          reviewerEmail,
           lastUpdated: new Date().toISOString()
         }));
       } catch (e) {
         console.error('Failed to save:', e);
       }
     }
-  }, [responses, reviewerName, isLoaded]);
+  }, [responses, reviewerName, reviewerEmail, isLoaded]);
 
-  const handleRating = (imageId: string, rating: string, comment?: string) => {
+  const handleRating = (imageId: string, rating: string) => {
     setResponses(prev => ({
       ...prev,
-      [imageId]: { rating, comment: comment || prev[imageId]?.comment || '', timestamp: new Date().toISOString() }
+      [imageId]: { ...prev[imageId], rating, timestamp: new Date().toISOString() }
     }));
   };
 
@@ -284,6 +283,8 @@ export default function App() {
     <LandingPage
       reviewerName={reviewerName}
       setReviewerName={setReviewerName}
+      reviewerEmail={reviewerEmail}
+      setReviewerEmail={setReviewerEmail}
       setCurrentView={setCurrentView}
       setActiveCategory={setActiveCategory}
       responses={responses}
@@ -294,9 +295,10 @@ export default function App() {
 // ============================================
 // LANDING PAGE
 // ============================================
-function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveCategory, responses }: any) {
+function LandingPage({ reviewerName, setReviewerName, reviewerEmail, setReviewerEmail, setCurrentView, setActiveCategory, responses }: any) {
   const [nameInput, setNameInput] = useState(reviewerName);
-  const hasStarted = nameInput.trim().length > 0;
+  const [emailInput, setEmailInput] = useState(reviewerEmail);
+  const hasStarted = nameInput.trim().length > 0 && emailInput.trim().length > 0;
 
   const colorClasses: Record<string, { bg: string; border: string }> = {
     amber: { bg: 'bg-amber-50', border: 'border-amber-200' },
@@ -315,8 +317,9 @@ function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveC
   };
 
   const startCategory = (category: any) => {
-    if (nameInput.trim()) {
+    if (nameInput.trim() && emailInput.trim()) {
       setReviewerName(nameInput.trim());
+      setReviewerEmail(emailInput.trim());
       setActiveCategory(category);
       setCurrentView('category');
     }
@@ -330,16 +333,25 @@ function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveC
       {/* Header */}
       <header className="bg-white border-b border-stone-200">
         <div className="max-w-4xl mx-auto px-6 py-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-stone-800 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">PA</span>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              {/* PA Logo */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-stone-800 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-xl">PA</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold text-stone-800">Potter Anderson & Corroon</h1>
+                  <p className="text-stone-500 text-sm">200th Anniversary Art Collection</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-stone-800">Art Collection Review</h1>
-              <p className="text-stone-500 text-sm">Potter Anderson & Corroon — 200th Anniversary</p>
+            {/* Pearhaus Logo */}
+            <div className="flex items-center gap-2 text-stone-400">
+              <span className="text-xs">Curated by</span>
+              <span className="font-semibold text-stone-600">Pearhaus</span>
             </div>
           </div>
-          {/* Environment indicator (dev only) */}
           {!IS_PRODUCTION && (
             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded">
               <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
@@ -352,34 +364,56 @@ function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveC
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* Welcome Section */}
         <section className="bg-white rounded-2xl border border-stone-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-stone-800 mb-2">Welcome</h2>
-          <p className="text-stone-600 mb-4">
-            Help us understand your preferences by reviewing proposed artwork for the firm's spaces.
-            Rate each piece to indicate what resonates — we're assessing taste to inform final selections,
-            not all pieces shown will be acquired.
-          </p>
-          <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-stone-800 mb-4">Welcome</h2>
+          <div className="text-stone-600 space-y-4 mb-6">
+            <p>
+              Help us understand your preferences by reviewing proposed artwork for the firm's spaces.
+              Rate each piece to indicate what resonates — we're assessing taste to inform final selections,
+              not all pieces shown will be acquired.
+            </p>
+            <p>
+              You do not need to provide feedback to all options below - feel free to just respond to only the
+              art pieces you have a strong positive / negative reaction to. We will consider no response as
+              neutral preference. We've also provided a comment field for each painting if you'd like to provide
+              specific feedback (e.g., great for conference room, would love this in the reception area, only
+              for internal spaces, etc.). But, again, that is optional.
+            </p>
+            <p>
+              At the bottom of this form is an opportunity to provide general comments and feedback, offer
+              other suggestions (artist names, links, galleries, etc.). You can also upload images as well.
+            </p>
+          </div>
+          <div className="space-y-3">
             <input
               type="text"
-              placeholder="Enter your name to begin"
+              placeholder="Your name"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              className="flex-1 px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-300"
+              className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-300"
+            />
+            <input
+              type="email"
+              placeholder="Your email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-300"
             />
           </div>
         </section>
 
         {/* Progress Overview */}
-        {(hasStarted || reviewerName) && (
+        {hasStarted && (
           <section className="bg-stone-800 text-white rounded-2xl p-6 mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-stone-400 text-sm">Overall Progress</div>
+                <div className="text-stone-400 text-sm">Progress</div>
                 <div className="text-2xl font-semibold">{totalCompleted} of {totalImages} pieces reviewed</div>
+                <div className="text-stone-400 text-sm mt-1">No response = neutral preference</div>
               </div>
               <div className="text-right">
                 <div className="text-stone-400 text-sm">Reviewing as</div>
-                <div className="font-medium">{reviewerName || nameInput}</div>
+                <div className="font-medium">{nameInput}</div>
+                <div className="text-stone-400 text-sm">{emailInput}</div>
               </div>
             </div>
             <div className="mt-4 h-2 bg-stone-700 rounded-full overflow-hidden">
@@ -392,7 +426,7 @@ function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveC
         )}
 
         {/* Categories Grid */}
-        {(hasStarted || reviewerName) && (
+        {hasStarted && (
           <section>
             <h2 className="text-lg font-semibold text-stone-800 mb-4">Categories</h2>
             <div className="grid md:grid-cols-2 gap-4">
@@ -424,32 +458,51 @@ function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveC
         )}
 
         {/* Additional Feedback Section */}
-        {(hasStarted || reviewerName) && (
+        {hasStarted && (
           <section className="mt-8 pt-8 border-t border-stone-200">
             <h2 className="text-lg font-semibold text-stone-800 mb-4">Additional Feedback</h2>
             <p className="text-stone-600 text-sm mb-6">
               Have other ideas? Share artist recommendations, reference images, websites, or general thoughts below.
             </p>
 
-            <AdditionalFeedback reviewerName={reviewerName || nameInput} responses={responses} />
+            <AdditionalFeedback
+              reviewerName={nameInput}
+              reviewerEmail={emailInput}
+              responses={responses}
+            />
           </section>
         )}
 
         {/* Export Button */}
-        {(hasStarted || reviewerName) && (
+        {hasStarted && (
           <section className="mt-8 pt-8 border-t border-stone-200">
-            <ExportButton responses={responses} reviewerName={reviewerName || nameInput} />
+            <ExportButton responses={responses} reviewerName={nameInput} />
           </section>
         )}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-stone-200 mt-12">
+        <div className="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-stone-800 rounded flex items-center justify-center">
+              <span className="text-white font-bold text-sm">PA</span>
+            </div>
+            <span className="text-stone-500 text-sm">Potter Anderson & Corroon</span>
+          </div>
+          <div className="text-stone-400 text-sm">
+            Curated by <span className="font-medium text-stone-600">Pearhaus</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
 // ============================================
-// CATEGORY REVIEW
+// CATEGORY REVIEW (with comment field)
 // ============================================
-function CategoryReview({ category, responses, handleRating, reviewerName, onBack }: any) {
+function CategoryReview({ category, responses, handleRating, handleComment, reviewerName, onBack }: any) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const colorClasses: Record<string, { bg: string; border: string; ring: string }> = {
@@ -483,7 +536,7 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
               </button>
               <div>
                 <h1 className="text-xl font-semibold text-stone-800">{category.title}</h1>
-                <p className="text-stone-500 text-sm">{completedCount} of {category.images.length} reviewed</p>
+                <p className="text-stone-500 text-sm">{completedCount} of {category.images.length} reviewed (optional)</p>
               </div>
             </div>
             <div className="text-sm text-stone-500">
@@ -502,7 +555,7 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
 
       {/* Image Grid */}
       <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {category.images.map((imageId: string, index: number) => {
             const response = responses[imageId];
 
@@ -527,6 +580,9 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
                     alt={imageId}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://via.placeholder.com/400x400?text=${imageId}`;
+                    }}
                   />
                   {response?.rating && (
                     <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-sm ${
@@ -539,10 +595,10 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
                   )}
                 </div>
 
-                {/* Rating Buttons */}
+                {/* Rating Buttons and Comment */}
                 <div className="p-3">
                   <div className="text-xs text-stone-400 mb-2">{imageId}</div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 mb-3">
                     <button
                       onClick={() => handleRating(imageId, 'yes')}
                       className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-all ${
@@ -574,6 +630,14 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
                       👎
                     </button>
                   </div>
+                  {/* Comment Field */}
+                  <textarea
+                    placeholder="Add a comment (optional)..."
+                    value={response?.comment || ''}
+                    onChange={(e) => handleComment(imageId, e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-stone-300 resize-none"
+                    rows={2}
+                  />
                 </div>
               </div>
             );
@@ -596,7 +660,6 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
             </svg>
           </button>
 
-          {/* Prev/Next */}
           {lightboxIndex > 0 && (
             <button
               className="absolute left-4 text-white/70 hover:text-white p-2"
@@ -618,7 +681,6 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
             </button>
           )}
 
-          {/* Image and Controls */}
           <div className="max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
             <img
               src={img(category.images[lightboxIndex])}
@@ -668,9 +730,9 @@ function CategoryReview({ category, responses, handleRating, reviewerName, onBac
 }
 
 // ============================================
-// ADDITIONAL FEEDBACK (with server submission)
+// ADDITIONAL FEEDBACK
 // ============================================
-function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string; responses: ResponseMap }) {
+function AdditionalFeedback({ reviewerName, reviewerEmail, responses }: { reviewerName: string; reviewerEmail: string; responses: ResponseMap }) {
   const [feedback, setFeedback] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -678,10 +740,9 @@ function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string;
   const [errorMessage, setErrorMessage] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Load saved feedback on mount
   React.useEffect(() => {
     try {
-      const savedFeedback = localStorage.getItem('pa-art-feedback-v3');
+      const savedFeedback = localStorage.getItem('pa-art-feedback-v4');
       if (savedFeedback) {
         const parsed = JSON.parse(savedFeedback);
         setFeedback(parsed.feedback || '');
@@ -691,18 +752,18 @@ function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string;
     }
   }, []);
 
-  // Save feedback as user types
   React.useEffect(() => {
     try {
-      localStorage.setItem('pa-art-feedback-v3', JSON.stringify({
+      localStorage.setItem('pa-art-feedback-v4', JSON.stringify({
         feedback,
         reviewerName,
+        reviewerEmail,
         lastUpdated: new Date().toISOString()
       }));
     } catch (e) {
       console.error('Failed to save feedback:', e);
     }
-  }, [feedback, reviewerName]);
+  }, [feedback, reviewerName, reviewerEmail]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -730,6 +791,7 @@ function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string;
     try {
       const result = await submitReview(
         reviewerName,
+        reviewerEmail,
         responses,
         feedback,
         uploadedFiles
@@ -737,7 +799,6 @@ function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string;
 
       if (result.success) {
         setSubmitStatus('success');
-        // Clear uploaded files after successful submission
         uploadedFiles.forEach(f => URL.revokeObjectURL(f.preview));
         setUploadedFiles([]);
       } else {
@@ -757,8 +818,8 @@ function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string;
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const hasResponses = Object.keys(responses).length > 0;
-  const canSubmit = hasResponses || feedback.trim() || uploadedFiles.length > 0;
+  // Can always submit - no requirement for responses
+  const canSubmit = reviewerName.trim().length > 0 && reviewerEmail.trim().length > 0;
 
   return (
     <div className="space-y-6">
@@ -789,7 +850,6 @@ function AdditionalFeedback({ reviewerName, responses }: { reviewerName: string;
           <span className="block text-stone-400 text-xs mt-1">PNG, JPG, PDF, DOC up to 10MB each</span>
         </button>
 
-        {/* Uploaded Files List */}
         {uploadedFiles.length > 0 && (
           <div className="mt-4 space-y-2">
             {uploadedFiles.map(({ file, preview }, index) => (
@@ -916,7 +976,6 @@ function ExportButton({ responses, reviewerName }: any) {
     let csv = 'Category,ID,Rating,Comment,Timestamp\n';
 
     Object.entries(responses).forEach(([id, data]: [string, any]) => {
-      // Determine category from ID prefix
       let category = 'Unknown';
       if (id.startsWith('book-')) category = 'Books as Art';
       else if (id.startsWith('de-')) category = 'Delaware Artists';
@@ -931,9 +990,8 @@ function ExportButton({ responses, reviewerName }: any) {
       csv += `"${category}","${id}","${data.rating || ''}","${comment}","${data.timestamp || ''}"\n`;
     });
 
-    // Add additional feedback if exists
     try {
-      const savedFeedback = localStorage.getItem('pa-art-feedback-v3');
+      const savedFeedback = localStorage.getItem('pa-art-feedback-v4');
       if (savedFeedback) {
         const parsed = JSON.parse(savedFeedback);
         if (parsed.feedback) {
@@ -953,7 +1011,7 @@ function ExportButton({ responses, reviewerName }: any) {
     URL.revokeObjectURL(url);
   };
 
-  const totalResponses = Object.keys(responses).length;
+  const totalResponses = Object.keys(responses).filter(k => responses[k]?.rating).length;
 
   return (
     <button

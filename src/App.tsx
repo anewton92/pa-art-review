@@ -449,7 +449,7 @@ function LandingPage({ reviewerName, setReviewerName, setCurrentView, setActiveC
 // ============================================
 // CATEGORY REVIEW
 // ============================================
-function CategoryReview({ category, responses, handleRating, handleComment, reviewerName, onBack }: any) {
+function CategoryReview({ category, responses, handleRating, reviewerName, onBack }: any) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const colorClasses: Record<string, { bg: string; border: string; ring: string }> = {

@@ -1,0 +1,21 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Environment variables for production
+# Set these in Netlify Dashboard > Site settings > Environment variables:
+# - VITE_PRODUCTION_MODE = "true"
+# - CLOUDINARY_CLOUD_NAME = "dejobxzdr"
+# - CLOUDINARY_API_KEY = (your API key)
+# - CLOUDINARY_API_SECRET = (your API secret)
+# - NOTIFICATION_EMAIL = "alex@pearhaus.com"
+# - SENDGRID_API_KEY = (your SendGrid API key)
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

@@ -13,6 +13,18 @@ const CLOUDINARY_BASE = 'https://res.cloudinary.com/dejobxzdr/image/upload';
 
 // Images with hash suffixes - map clean ID to full public ID
 const IMAGE_MAP: Record<string, string> = {
+  // Books as Art
+  'books-1': 'books-1_isj3gk',
+  'books-2': 'books-2_aykyvm',
+  'books-3': 'books-3_bdkpzh',
+  'books-4': 'books-4_qzy4r5',
+  'books-5': 'books-5_wepd1q',
+  'books-6': 'books-6_po4gs8',
+  'books-7': 'books-7_kuhbug',
+  'books-8': 'books-8_wbktt6',
+  'books-9': 'books-9_ttzupz',
+  'books-10': 'books-10_d7apgi',
+  'books-11': 'books-11_rmybge',
   // Impressionist
   'impr-1': 'impr-1_mjynof',
   'impr-2': 'impr-2_vp2i1v',
@@ -34,7 +46,7 @@ const IMAGE_MAP: Record<string, string> = {
   'impr-18': 'impr-18_ihmagr',
   // Surrealism
   'surr-1': 'surr-1_vt80fk',
-  'surr-2': 'surr-2_xjodb8',
+  'surr-2': 'surr-2_ua82cw',
   'surr-3': 'surr-3_kqgqlr',
   'surr-4': 'surr-4_t0oldo',
   'surr-5': 'surr-5_quvqo4',
@@ -73,7 +85,7 @@ const img = (id: string) => {
   if (IMAGE_MAP[id]) {
     return `${CLOUDINARY_BASE}/${IMAGE_MAP[id]}.png`;
   }
-  // Try the ID directly (for book-, de-, free-, grid-, abs- images)
+  // Try the ID directly (for de-, free-, grid-, abs-, dim- images without hashes)
   return `${CLOUDINARY_BASE}/${id}.png`;
 };
 
@@ -86,21 +98,21 @@ const PROPOSED_ART_CATEGORIES = [
     title: 'Books as Art',
     color: 'amber',
     description: 'Sculptural book pieces and literary-inspired artworks that honor the firm\'s intellectual heritage.',
-    images: Array.from({ length: 30 }, (_, i) => `book-${i + 1}`)
+    images: Array.from({ length: 11 }, (_, i) => `books-${i + 1}`)
   },
   {
     id: 'delaware-artists',
     title: 'Delaware Artists',
     color: 'emerald',
     description: 'Works by contemporary Delaware artists, connecting the firm to its local creative community.',
-    images: Array.from({ length: 42 }, (_, i) => `de-${i + 1}`)
+    images: Array.from({ length: 37 }, (_, i) => `de-${i + 1}`)
   },
   {
     id: 'freestanding-sculpture',
     title: 'Freestanding Sculpture',
     color: 'sky',
     description: 'Three-dimensional works for lobbies, conference areas, and circulation spaces.',
-    images: Array.from({ length: 18 }, (_, i) => `free-${i + 1}`)
+    images: Array.from({ length: 7 }, (_, i) => `free-${i + 1}`)
   },
   {
     id: 'dimensional-relief',
@@ -114,14 +126,15 @@ const PROPOSED_ART_CATEGORIES = [
     title: 'Grid & Modular',
     color: 'violet',
     description: 'Systematic arrangements and repeating compositions for larger wall expanses.',
-    images: Array.from({ length: 30 }, (_, i) => `grid-${i + 1}`)
+    images: Array.from({ length: 15 }, (_, i) => `grid-${i + 1}`)
   },
   {
     id: 'abstract-paintings',
     title: 'Abstract Paintings',
     color: 'orange',
     description: 'Contemporary abstract works in various scales for office and common areas.',
-    images: Array.from({ length: 32 }, (_, i) => `abs-${i + 1}`)
+    // abs-12 is corrupted, so we use 1-11 and 13-32 (31 images total)
+    images: [...Array.from({ length: 11 }, (_, i) => `abs-${i + 1}`), ...Array.from({ length: 20 }, (_, i) => `abs-${i + 13}`)]
   },
   {
     id: 'surrealism',
@@ -581,7 +594,7 @@ function CategoryReview({ category, responses, handleRating, handleComment, revi
                     className="w-full h-full object-cover"
                     loading="lazy"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = `https://via.placeholder.com/400x400?text=${imageId}`;
+                      (e.target as HTMLImageElement).style.display = 'none';
                     }}
                   />
                   {response?.rating && (
@@ -818,7 +831,6 @@ function AdditionalFeedback({ reviewerName, reviewerEmail, responses }: { review
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  // Can always submit - no requirement for responses
   const canSubmit = reviewerName.trim().length > 0 && reviewerEmail.trim().length > 0;
 
   return (
@@ -977,7 +989,7 @@ function ExportButton({ responses, reviewerName }: any) {
 
     Object.entries(responses).forEach(([id, data]: [string, any]) => {
       let category = 'Unknown';
-      if (id.startsWith('book-')) category = 'Books as Art';
+      if (id.startsWith('books-')) category = 'Books as Art';
       else if (id.startsWith('de-')) category = 'Delaware Artists';
       else if (id.startsWith('free-')) category = 'Freestanding Sculpture';
       else if (id.startsWith('dim-')) category = 'Dimensional Relief';
